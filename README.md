@@ -4,13 +4,19 @@
 [![CLOUD](https://img.shields.io/badge/CLOUD-CHANGE_ME-blue?logo=googlecloud&style=for-the-badge)](https://databricks.com/try-databricks)
 
 ## Business Problem
-WHAT IS THE BUSINESS PROBLEM ADDRESSED BY THIS SOLUTION
+This repo is part of the blog article (link to be added), talking about how to combine the Databricks Platform and the Mosaic AI framework components with the Neo4j Graph Database in order to create a cutting edge GraphRAG based chatbot.. In this repo, we’ll highlight how to build and deploy a Knowledge Graph RAG (GraphRAG) system on Databricks and Neo4j using Langchain. We’ll cover how to build a knowledge graph database from structured data in Unity Catalog, general approaches when working with structured (or unstructured) data, the underlying models used for translating text to graph query language, and how to deploy an end-to-end system using Databricks model serving. We will use a cybersecurity example with the open-source data, showing how GraphRAG can help SOC analysts process massive volumes of alerts and identify intricate threat patterns.
 
 ## Reference Architecture
-IMAGE TO REFERENCE ARCHITECTURE
+
 
 ## Authors
-<john.doe@databricks.com>
+<andrea.santurbano@databricks.com>
+
+<chandhana.padmanabhan@databricks.com>
+
+<jiayi.wu@databricks.com> 
+
+<dan.pechi@databricks.com>
 
 ## Project support 
 
