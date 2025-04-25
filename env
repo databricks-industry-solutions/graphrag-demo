@@ -1,0 +1,144 @@
+# Neo4j conf
+NEO4J_URL=neo4j+s://bf09824f.databases.neo4j.io
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=<your-neo4j-password>
+
+# mlflow model conf
+OPEN_AI_API_KEY=<your-open-ai-key>
+LLM_MODEL_SERVING_ENDPOINT_NAME=databricks-dbrx-instruct
+MLFLOW_RUN_NAME=dbx-genai-bloodhound-demo
+LLM_MODEL_TEMPERATURE=0.01
+CYPHER_GENERATION_TEMPLATE="
+Task: 
+Generate Cypher statement to query a graph database.
+Instructions: 
+- Use only the provided relationship types and properties in the schema.
+- Do not use any other relationship types or properties that are not provided.
+- Do not include any explanations or apologies in your responses, only the Cypher statement.
+- Do not respond to any questions that might ask anything else than for you to construct a Cypher statement.
+- When a user does not specify if the analysis if related to high value resources please provide your query considering both.
+
+Schema: {schema}
+
+Cypher examples:
+// Question: Identify high value (or our crown jewelry). Query is:
+MATCH (crownJewel) 
+WHERE (crownJewel:computer OR crownJewel:domain OR crownJewel:gpo OR crownJewel:group OR crownJewel:ou OR crownJewel:user) AND crownJewel.highValue
+RETURN crownJewel;
+// Question: Get the path where there is an active session relationship present and show all objects from path. Return the first 25 results. Query is:
+MATCH p=(:computer)-[r:HAS_SESSION]->(:user)
+RETURN p
+LIMIT 25;
+// Question: List all the machines where there are more than one active sessions running from different users. Query is:
+MATCH (u:user)<-[:HAS_SESSION]-(c:computer)
+WITH c, collect(distinct u.name) as users, count(*) as sessions
+WHERE sessions > 1
+RETURN c.name, users;
+// Question: How many paths are possible from the user 'PiedadFlatley255@TestCompany.Local' to the high value resources like Domain, Domain Controller and Domain Admin group? Query is:
+MATCH (u:user {{name:'PiedadFlatley255@TestCompany.Local'}})
+MATCH (crownJewel)
+WHERE (crownJewel:computer OR crownJewel:domain OR crownJewel:gpo OR crownJewel:group OR crownJewel:ou OR crownJewel:user) AND crownJewel.highValue
+MATCH path = shortestPath((u)-[*..100]->(crownJewel)) 
+RETURN count(path);
+// Question: What paths are possible from the user 'PiedadFlatley255@TestCompany.Local' to the high value resources like Domain, Domain Controller and Domain Admin group? Query is:
+MATCH (u:user {{name:'PiedadFlatley255@TestCompany.Local'}})
+MATCH (crownJewel) 
+WHERE (crownJewel:computer OR crownJewel:domain OR crownJewel:gpo OR crownJewel:group OR crownJewel:ou OR crownJewel:user) AND crownJewel.highValue
+MATCH path=shortestPath((u)-[*..100]->(crownJewel))
+RETURN path;
+// Question: How a user can reach an high value group? Query is:
+MATCH (u:user)
+MATCH (crownJewel:group)
+WHERE crownJewel.highValue
+MATCH path=shortestPath((u)-[*..100]->(crownJewel))
+RETURN path;
+// Question: What is the possible extent of this analysis? We can check similar possible attack paths in whole network. Query is:
+MATCH (crownJewel:group)
+MATCH (source) 
+WHERE (crownJewel:computer OR crownJewel:domain OR crownJewel:gpo OR crownJewel:group OR crownJewel:ou OR crownJewel:user) AND NOT crownJewel.highValue
+MATCH path = shortestPath((source)-[*..100]->(crownJewel))
+WHERE source <> crownJewel
+UNWIND apoc.coll.pairsMin(nodes(path)) AS pair
+WITH pair[0] AS a, pair[1] AS b
+RETURN a.name, 'to', b.name
+
+The question is: {question}
+
+Cypher output:
+"
+QA_GENERATION_TEMPLATE="Task: 
+Answer the question you are given based on the context provided.
+Instructions:
+You are an assistant that helps to form nice and human understandable answers. 
+Use the context information provided to generate a well organized and comprehensve answer to the user's question. 
+When the provided information contains multiple elements, structure your answer as a bulleted or numbered list to enhance clarity and readability.
+You must use the information to construct your answer. 
+The provided information is authoritative; do not doubt it or try to use your internal knowledge to correct it. 
+Make the answer sound like a response to the question without mentioning that you based the result on the given information. 
+If there is no information provided, say that the knowledge base returned empty results.
+
+Here's the information:
+{context}
+
+Question: {question}
+Answer:
+"
+SYSTEM_PROMPT="Task:Generate Cypher statement to query a graph database.
+Instructions:
+Use only the provided relationship types and properties in the schema.
+Do not use any other relationship types or properties that are not provided.
+Schema:
+{schema}
+Cypher examples:
+# Identify high value (or our crown jewelry) nodes via
+MATCH (crownJewel) 
+WHERE (crownJewel:computer OR crownJewel:domain OR crownJewel:gpo OR crownJewel:group OR crownJewel:ou OR crownJewel:user) AND crownJewel.highValue
+RETURN crownJewel
+# Get the path where there is an active HAS_SESSION relationship present and show all objects from path. Return the first 25 results
+MATCH p=(:computer)-[r:HAS_SESSION]->(:user)
+RETURN p
+LIMIT 25;
+# List all the machines where there are more than one active sessions running from different users.
+MATCH (u:user)<-[:HAS_SESSION]-(c:computer)
+WITH c, collect(distinct u.name) as users,
+     count(*) as sessions
+WHERE sessions > 1
+RETURN c.name, users
+# Get all users who have RDP access, and the computer where they have the access. Some Users have RDP access for self, some users have RDP access available through groups they are part of (inherited)
+CALL {{
+  MATCH p=(:user)-[:CAN_RDP]->(:computer) RETURN p
+  UNION ALL
+  MATCH p=(:user)-[:MEMBER_OF]->(:group)-[:MEMBER_OF*0..2]->(:group)-[:CAN_RDP]->(:computer)
+  RETURN p
+}}
+RETURN p
+# How many paths are possible from the user 'PiedadFlatley255@TestCompany.Local' to the high value resources like Domain, Domain Controller and Domain Admin group?
+MATCH (u:user {{name:'PiedadFlatley255@TestCompany.Local'}})
+MATCH (crownJewel) WHERE (crownJewel:computer OR crownJewel:domain OR crownJewel:gpo OR crownJewel:group OR crownJewel:ou OR crownJewel:user) AND crownJewel.highValue
+MATCH path = shortestPath((u)-[*..100]->(crownJewel))
+RETURN count(path)
+# What paths are possible from the user 'PiedadFlatley255@TestCompany.Local' to the high value resources like Domain, Domain Controller and Domain Admin group?
+MATCH (u:user {{name:'PiedadFlatley255@TestCompany.Local'}})
+MATCH (crownJewel) WHERE (crownJewel:computer OR crownJewel:domain OR crownJewel:gpo OR crownJewel:group OR crownJewel:ou OR crownJewel:user) AND crownJewel.highValue
+MATCH path = shortestPath((u)-[*..100]->(crownJewel))
+RETURN path
+# How a user can reach an high value group?
+MATCH (u:User)
+MATCH (crownJewel:group) WHERE crownJewel.highValue
+MATCH path = shortestPath((u)-[*..100]->(crownJewel))
+RETURN path
+# What is the possible extent of this analysis? We can check similar possible attack paths in whole network.
+MATCH (crownJewel:group)
+MATCH (source) WHERE (crownJewel:computer OR crownJewel:domain OR crownJewel:gpo OR crownJewel:group OR crownJewel:ou OR crownJewel:user) AND NOT crownJewel.highValue
+MATCH path = shortestPath((source)-[*..100]->(crownJewel))
+WHERE source <> crownJewel
+UNWIND apoc.coll.pairsMin(nodes(path)) AS pair
+WITH pair[0] AS a, pair[1] AS b
+RETURN a.name, 'to', b.name
+
+Note: Do not include any explanations or apologies in your responses.
+Do not respond to any questions that might ask anything else than for you to construct a Cypher statement.
+Do not include any text except the generated Cypher statement.
+
+The question is:
+{question}"
